@@ -68,9 +68,9 @@ For a small group of users this will all run within the AWS free tier.
 The Lambda function requires the following information, stored in DynamoDB:
 
 spotifyAPI table - 3 items with 2 attributes (name and value):
-- name: `client_id` - value: Your Spotify app's client ID.
-- name: `client_secret` - value: Your Spotify app's client secret.
-- name: `search_token` - value: Your Spotify app's search API key, retrieved and stored by the get_search_token routine.
+- name: client_id, value: Your Spotify app's client ID.
+- name: client_secret, value: Your Spotify app's client secret.
+- name: search_token, value: Your Spotify app's search API key (retrieved and stored by the get_search_token routine).
 
 SpotifyState table - 1 item for each user with 5 attributes:
 - apiUser: The API key for your AWS API Gateway user.

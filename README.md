@@ -33,27 +33,25 @@ For a small group of users this will all run within the AWS free tier.
 
 - AWS account with Lambda, API and DynamoDB access. Free tier is fine.
 - Spotify Developer account with a configured app.
-  - Scopes: user-read-playback-state, user-modify-plaaybacl-state, user-read-currently-playing.
+  - Scopes: user-read-playback-state, user-modify-playback-state, user-read-currently-playing.
 - SiriusXM premium account.
 
 ### Installation
 
 1. Clone the repository:
     ```sh
-    git clone https://github.com/yourusername/aws-lambda-siriusxm-spotify-scraper.git
-    cd aws-lambda-siriusxm-spotify-scraper
+    git clone https://github.com/macoirc/dont-call-me-shirley.git
+    cd dont-call-me-shirley
     ```
 
 2. Install dependencies:
-    ```sh
-    pip install -r requirements.txt
-    ```
+    AWS Python Lambdas do not come with the 'requests' package pre-installed. You'll need to upload requests.zip as a layer for your Lambda.
 
 3. Deploy the Lambda function using AWS CLI or AWS Management Console.
 
 4. Configure 2 DynamoDB tables:
     - spotifyAPI to hold app secrets
-    - SpotifyState to hold user secrets/config
+    - SpotifyState to hold user secrets/configuration
 
 5. Configure AWS API Gateway to handle requests and trigger the functions.
     - GET /getsong

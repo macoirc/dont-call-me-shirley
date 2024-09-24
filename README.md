@@ -31,8 +31,8 @@ For a small group of users this will all run within the AWS free tier.
 
 ### Prerequisites
 
-- AWS account with Lambda and DynamoDB access.
-- Spotify Developer account with configured app.
+- AWS account with Lambda, API and DynamoDB access. Free tier is fine.
+- Spotify Developer account with a configured app.
   - Scopes: user-read-playback-state, user-modify-plaaybacl-state, user-read-currently-playing.
 - SiriusXM premium account.
 

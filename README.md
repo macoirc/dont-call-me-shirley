@@ -61,7 +61,7 @@ For a small group of users this will all run within the AWS free tier.
 
 1. Configure the DynamoDB tables for the necessary variables (see Configuration section).
 2. I strongly recommend setting up an API Gateway configuration to handle requests.
-3. Trigger the Lambda function with an appropriate event to start scraping and queuing songs.
+3. Trigger the Lambda function with an appropriate event to start scraping and queuing songs. You need a client capable of sending a GET request with the API key and channel name, and the ability to handle the response, as well as a looping function to keep pulling new songs. I use an Apple shortcut on my phone and it works great.
 
 ## Configuration
 

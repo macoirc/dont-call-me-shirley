@@ -16,6 +16,9 @@ BASE_URL = 'https://lookaround-cache-prod.streaming.siriusxm.com/playbackservice
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.47'
 ROSETTA = {
 	"holiday-traditions":"33794a0f-2a24-08bb-492e-12e441fab2f0", 
+    "holly": "ba107a8d-fb2d-571e-1894-f6ea03ed318a", 
+    "hallmark-radio": "acf8556b-03f4-e739-554f-464d50ba738d", 
+    "country-christmas": "71dbb5a0-8995-958b-e139-b63b2864cabb", 
     "10s-spot": "038e9a9a-4878-7561-521b-5d432a0798a0", 
     "1st-wave": "65f04311-3581-256c-97b9-279838d6ff5e", 
     "70s-on-7": "95d4d8ef-55e4-8337-78f1-2fda944991d8", 

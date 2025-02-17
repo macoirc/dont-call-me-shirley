@@ -185,7 +185,7 @@ function setCookie(cname, cvalue, exdays) {
     const d = new Date();
     d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
     let expires = "expires="+d.toUTCString();
-    document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/spotify-player;samesite=strict;secure=true";
+    document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/client;samesite=strict;secure=true";
 }
 
 async function getCookie(cname) {

@@ -1,6 +1,3 @@
-const your_app_id = '';
-const your_api_url = '';
-const your_redirect = '';
 var token = '';
 var station = '';
 var isPlaying = false;
@@ -13,7 +10,7 @@ var apiKey = checkCookie().then( reply => {
     } else {
         apiKey = prompt('Please enter your API key. Once entered you will be directed to authorize the app with Spotify. Make sure to check for blocked pop-ups...the app won\'t work without proper authorization. Once authorized you may return back here.');
         setCookie('shirley-api', apiKey, 365);
-        window.open(`https://accounts.spotify.com/authorize?client_id=${your_app_id}&response_type=code&redirect_uri=${your_redirect}&scope=streaming%20user-read-private%20user-read-playback-state%20user-modify-playback-state%20user-read-currently-playing%20user-read-email&state=${apiKey}`, '_blank');
+        window.open(`https://accounts.spotify.com/authorize?client_id=f9f9e208c1bd4e69b53f7a7126f4d655&response_type=code&redirect_uri=https%3A%2F%2F22q08igefi.execute-api.us-east-1.amazonaws.com%2Fv1%2Fspotifyauth&scope=streaming%20user-read-private%20user-read-playback-state%20user-modify-playback-state%20user-read-currently-playing%20user-read-email&state=${apiKey}`, '_blank');
     }
 });
 
@@ -37,7 +34,7 @@ window.onSpotifyWebPlaybackSDKReady = async () => {
     player.addListener('ready', ({ device_id }) => {
         console.log('Ready: ', device_id);
         player_id = device_id;
-        document.getElementById('main-container').style.display = 'flex';
+        document.querySelector('.player-body').style.display = 'flex';
         document.getElementById('channel-selector').addEventListener('change', function() {
             station = this.value;
             if (isPlaying) {
@@ -65,21 +62,21 @@ async function togglePlayPause() {
         console.log('Stop button pressed.');
         await player.pause();
         clearTimeout(runID);
-        document.getElementById('togglePlay').innerHTML = '<i class="fas fa-play"></i>';
-        document.getElementById('album-art').src = "https://store-images.s-microsoft.com/image/apps.10546.13571498826857201.6603a5e2-631f-4f29-9b08-f96589723808.dc893fe0-ecbc-4846-9ac6-b13886604095?h=380";
+        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
+        document.getElementById('album-image').src = "https://store-images.s-microsoft.com/image/apps.10546.13571498826857201.6603a5e2-631f-4f29-9b08-f96589723808.dc893fe0-ecbc-4846-9ac6-b13886604095?h=380";
         document.querySelector('.card-artist').style.display = 'none';
         document.querySelector('.card-title').style.display = 'none';
     } else {
         isPlaying = true;
         console.log('Play button pressed.');
-        document.getElementById('togglePlay').innerHTML = '<i class="fas fa-stop"></i>';
+        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-stop"></i>';
         do {
             newTrack = await getTrack('loading new track.');
             if (newTrack.error) {
                 console.error('Error from getTrack():', newTrack.error);
                 isPlaying = false;
                 alert('An error occurred. Please try again later.');
-                document.getElementById('togglePlay').innerHTML = '<i class="fas fa-play"></i>';
+                document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
                 break;
             }
             duration = newTrack.duration_ms;
@@ -112,17 +109,18 @@ async function playTrack(current_track) {
     await player.resume();
     let currentTrackName = current_track.name;
     let artist = current_track.artists[0].name
+    let myImage = document.getElementById('album-image');
     current_track.album.images.forEach(image => {
-        if (image.height === 300 && document.getElementById('album-art').src != image.url) {
-            document.getElementById('album-art').src = image.url;
+        if (image.height === 300 && myImage.src != image.url) {
+            myImage.src = image.url;
         }
     });
     var setArtist = document.querySelector('.card-artist');
     var setTitle = document.querySelector('.card-title');
     setArtist.innerHTML = artist;
     setTitle.innerHTML = currentTrackName;
-    setArtist.style.display = 'block';
-    setTitle.style.display = 'block';
+    setArtist.style.display = 'flex';
+    setTitle.style.display = 'flex';
     if (artist.length > 44) {
         setArtist.className = 'card-artist marquee';
     } else {
@@ -138,7 +136,7 @@ async function playTrack(current_track) {
 async function getTrack(message = '', retries = 0) {
     console.log(`getTrack() called: ${message}`);
     try {
-        const response = await fetch(`${your_api_url}/v1/getsong?channel=${station}`, {
+        const response = await fetch(`https://22q08igefi.execute-api.us-east-1.amazonaws.com/v1/getsong?channel=${station}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -190,7 +188,7 @@ function setCookie(cname, cvalue, exdays) {
     document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/spotify-player;samesite=strict;secure=true";
 }
 
-function getCookie(cname) {
+async function getCookie(cname) {
     let name = cname + "=";
     let decodedCookie = decodeURIComponent(document.cookie);
     let ca = decodedCookie.split(';');
@@ -207,7 +205,7 @@ function getCookie(cname) {
 }
 
 async function checkCookie() {
-    let user = getCookie("shirley-api");
+    let user = await getCookie("shirley-api");
     if (user != "") {
         return user;
     } else {
@@ -216,7 +214,7 @@ async function checkCookie() {
 }
 
 async function spotifyToken(apiKey) {
-    response = await fetch(`${your_api_url}/v1/getsong?getToken=true`, {
+    response = await fetch('https://22q08igefi.execute-api.us-east-1.amazonaws.com/v1/getsong?getToken=true', {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',

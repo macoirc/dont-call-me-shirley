@@ -1,3 +1,6 @@
+const your_app_id = 'f9f9e208c1bd4e69b53f7a7126f4d655';
+const your_api_url = 'https://22q08igefi.execute-api.us-east-1.amazonaws.com/v1';
+const your_redirect = 'https%3A%2F%2F22q08igefi.execute-api.us-east-1.amazonaws.com%2Fv1%2Fspotifyauth';
 var token = '';
 var station = '';
 var isPlaying = false;
@@ -10,7 +13,7 @@ var apiKey = checkCookie().then( reply => {
     } else {
         apiKey = prompt('Please enter your API key. Once entered you will be directed to authorize the app with Spotify. Make sure to check for blocked pop-ups...the app won\'t work without proper authorization. Once authorized you may return back here.');
         setCookie('shirley-api', apiKey, 365);
-        window.open(`https://accounts.spotify.com/authorize?client_id=f9f9e208c1bd4e69b53f7a7126f4d655&response_type=code&redirect_uri=https%3A%2F%2F22q08igefi.execute-api.us-east-1.amazonaws.com%2Fv1%2Fspotifyauth&scope=streaming%20user-read-private%20user-read-playback-state%20user-modify-playback-state%20user-read-currently-playing%20user-read-email&state=${apiKey}`, '_blank');
+        window.open(`https://accounts.spotify.com/authorize?client_id=${your_app_id}&response_type=code&redirect_uri=${your_redirect}&scope=streaming%20user-read-private%20user-read-playback-state%20user-modify-playback-state%20user-read-currently-playing%20user-read-email&state=${apiKey}`, '_blank');
     }
 });
 
@@ -136,7 +139,7 @@ async function playTrack(current_track) {
 async function getTrack(message = '', retries = 0) {
     console.log(`getTrack() called: ${message}`);
     try {
-        const response = await fetch(`https://22q08igefi.execute-api.us-east-1.amazonaws.com/v1/getsong?channel=${station}`, {
+        const response = await fetch(`${your_api_url}/getsong?channel=${station}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json',
@@ -214,7 +217,7 @@ async function checkCookie() {
 }
 
 async function spotifyToken(apiKey) {
-    response = await fetch('https://22q08igefi.execute-api.us-east-1.amazonaws.com/v1/getsong?getToken=true', {
+    response = await fetch(`${your_api_url}/getsong?getToken=true`, {
         method: 'GET',
         headers: {
             'Content-Type': 'application/json',

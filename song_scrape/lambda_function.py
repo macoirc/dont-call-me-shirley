@@ -123,6 +123,7 @@ def scrape_song(station):
         return None, None
 
 def song_search(title, artist):
+    artist = artist.split('/')[0] # some songs have multiple artists
     client = boto3.resource('dynamodb')
     table = client.Table('spotifyAPI')
     my_token = table.get_item(

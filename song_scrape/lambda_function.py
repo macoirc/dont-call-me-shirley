@@ -302,6 +302,35 @@ def check_dupes(title, api_key):
         )
         return False
 
+def backup_api(station):
+    headers = {"User-Agent": UA, 
+               'Cache-Control': 'max-age=60',
+                'Accept': 'application/json'
+               }
+    channelMap = {
+        # To Do: Translate the rest of the channels
+        'y2kountry': 'y2kountry',
+        'the-highway': 'thehighway',
+        'classic-rewind': 'classicrewind',
+        'classic-vinyl': 'classicvinyl',
+        'coffeehouse': 'coffeehouse',
+        'the-pulse': 'thepulse',
+        'pop2k': 'pop2k',
+        'disney-hits': 'disneyhits',
+        'xm-hits-1': 'siriusxmhits1',
+        'yacht-rock-311': 'yachtrock311'
+    }
+    channel = channelMap[station]
+    response = requests.get(url=f'https://xmplaylist.com/api/station/{channel}', headers=headers)
+    if response.json() is not None:
+        if response.json().get('results') is not None:
+            song_list = response.json().get('results')
+            backup_song = song_list[len(song_list - 1)].get('track') # get the last song
+            title = backup_song.get('title')
+            artist = backup_song.get('artists')[0]
+            return title, artist
+    return None, None
+
 def handler(event, context):
     if 'queryStringParameters' in event and\
       'channel' in event['queryStringParameters']:
@@ -311,10 +340,22 @@ def handler(event, context):
             station = ROSETTA[choice]
             dupe = True
             while dupe: # keep trying until a new song is playing
-                title, artist = scrape_song(station)
+                for _ in range(2):
+                    title, artist = scrape_song(station)
+                    if title is None:
+                        time.sleep(5) # wait 5 seconds before trying again
+                    else:
+                        break
                 if title is None:
-                    time.sleep(5) # wait 5 seconds before trying again
-                    continue
+                    title, artist = backup_api(choice)
+                    if title is None:
+                        return {
+                            'statusCode': 503,
+                            'headers': {"Content-Type": "application/json",
+                                        "Retry-After": 10,
+                                        "Access-Control-Allow-Origin": "*"},
+                            'body': json.dumps({"status": "Please try again later."})
+                        }
                 # some songs have the year at the end and Spotify no likey
                 if title[-4:-3] == '(' and title[-1] == ')':
                     title = title[:-4]
@@ -323,7 +364,7 @@ def handler(event, context):
                     time.sleep(5) # wait 5 seconds before trying again
             song = song_search(title, artist)
             if song == {}:
-                # return 10 second retry if song not found
+                # return a retry to the client if a song still has not been found after all that
                 return {
                     'statusCode': 503,
                     'headers': {"Content-Type": "application/json",

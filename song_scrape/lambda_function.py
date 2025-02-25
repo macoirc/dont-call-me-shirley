@@ -343,12 +343,15 @@ def handler(event, context):
                 for _ in range(2):
                     title, artist = scrape_song(station)
                     if title is None:
+                        print("Scrape failed, trying again after 5 seconds.")
                         time.sleep(5) # wait 5 seconds before trying again
                     else:
                         break
                 if title is None:
+                    print("Multiple scrape failures, trying xmplaylist.com api.")
                     title, artist = backup_api(choice)
                     if title is None:
+                        print("xmplaylist.com api failed, returning 503.")
                         return {
                             'statusCode': 503,
                             'headers': {"Content-Type": "application/json",
@@ -365,6 +368,7 @@ def handler(event, context):
             song = song_search(title, artist)
             if song == {}:
                 # return a retry to the client if a song still has not been found after all that
+                print("Song not found at Spotify, returning 503.")
                 return {
                     'statusCode': 503,
                     'headers': {"Content-Type": "application/json",

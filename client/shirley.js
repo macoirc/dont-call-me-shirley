@@ -151,6 +151,9 @@ async function getTrack(message = '', retries = 0) {
         if ((response.headers.get('content-type')?.includes('text/html')) || (response.status == 503) || (response.status == 504)) {
             console.error(await response.text());
             if (retries < 3) {
+                document.getElementById('album-image').src = 'https://www.shutterstock.com/shutterstock/videos/26235881/thumb/1.jpg?ip=x480';
+                document.querySelector('.card-artist').innerHTML = 'Please stand by...';
+                document.querySelector('.card-title').innerHTML = 'Retrying...';
                 return await getTrack('Did not retrieve track...retrying.', retries + 1);
             } else {
                 console.log('Max retries reached. Giving up.');

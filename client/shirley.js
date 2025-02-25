@@ -124,12 +124,12 @@ async function playTrack(current_track) {
     setTitle.innerHTML = currentTrackName;
     setArtist.style.display = 'flex';
     setTitle.style.display = 'flex';
-    if (artist.length > 44) {
+    if (artist.length > 35) {
         setArtist.className = 'card-artist marquee';
     } else {
         setArtist.className = 'card-artist';
     }
-    if (currentTrackName.length > 44) {
+    if (currentTrackName.length > 35) {
         setTitle.className = 'card-title marquee';
     } else {
         setTitle.className = 'card-title';

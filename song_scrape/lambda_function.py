@@ -55,7 +55,7 @@ ROSETTA = {
     "pop-mix-upbeat": "2243f789-5662-2ab7-c51e-04dc8e6fe08d", 
     "spectrum": "804a5411-b234-1188-27da-f01197103886", 
     "sirius-xm-u": "f49737db-bea3-0c13-9834-b879fb1894c4", 
-    "xm-hits1": "194adbca-34d6-cb94-b153-3488ee563308",
+    "xm-hits-1": "194adbca-34d6-cb94-b153-3488ee563308",
 	"the-beatles-channel": "20801778-3df2-d607-eab5-e03de0ca7815", 
     "the-blend": "bda81f03-f231-d4db-56ad-40cb132c5663",
 	"the-bridge": "1898923d-071d-0abd-1a62-ed0d2702d4f1", 

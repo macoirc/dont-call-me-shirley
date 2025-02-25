@@ -367,6 +367,15 @@ def handler(event, context):
                     time.sleep(5) # wait 5 seconds before trying again
             song = song_search(title, artist)
             if song == {}:
+                # clear out the last played song title
+                client = boto3.resource('dynamodb')
+                user_api = client.Table('SpotifyState')
+                user_api.update_item(
+                    Key={"apiUser": api_key},
+                    UpdateExpression="set #v1 = :r",
+                    ExpressionAttributeNames={"#v1": "lastPlayed"},
+                    ExpressionAttributeValues={":r": ""}
+                )
                 # return a retry to the client if a song still has not been found after all that
                 print("Song not found at Spotify, returning 503.")
                 return {

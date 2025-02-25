@@ -110,8 +110,13 @@ def scrape_song(station):
     headers = {"User-Agent": UA, 
                'Cache-Control': 'max-age=60'}
     response = requests.get(url=BASE_URL, headers=headers)
-    if response.json() is not None:
-        content = response.json().get('channels')
+    try:
+        json_data = response.json()
+    except ValueError:
+        json_data = None
+
+    if json_data is not None:
+        content = json_data.get('channels')
         if station in content.keys():
             playing = content[station].get('cuts')
             title = playing[-1].get('name')
@@ -122,40 +127,61 @@ def scrape_song(station):
         print('Scraped values were empty.')
         return None, None
 
-def song_search(title, artist):
-    artist = artist.split('/')[0] # some songs have multiple artists
+def song_search(title, artist, spotify_id = None):
+    if artist is not None:
+        artist = artist.split('/')[0] # some songs have multiple artists
     client = boto3.resource('dynamodb')
     table = client.Table('spotifyAPI')
     my_token = table.get_item(
         Key = {'name': 'search_token'},
         AttributesToGet=['value']
     )
-    spotify_url = 'https://api.spotify.com/v1/search'
     search_headers = {'Accept': 'application/json', 
                       'Content-Type': 'application/json', 
                       'Authorization': f'Bearer {my_token}', 
                       'User-Agent': UA}
-    query_string = f'{title} artist:{artist}'
-    search_params = {"q": query_string,
-                     "type": "track",
-                     "market": "US",
-                     "offset": 0,
-                     "limit": 20,
-                     "locale": "en-US,en;q=0.9"
-                     }
-    try:
-        print(f'Searching {title} by {artist}')
-        search = requests.get(url=spotify_url, headers=search_headers, params=search_params)
-        if search.status_code == 400:
-            my_token = get_search_token(table)
-            search_headers = {'Accept': 'application/json', 
-                      'Content-Type': 'application/json', 
-                      'Authorization': f'Bearer {my_token}', 
-                      'User-Agent': UA}
+    if spotify_id is not None:
+        spotify_url = f'https://api.spotify.com/v1/tracks/{spotify_id}'
+        try:
+            print(f'Searching by id {spotify_id}')
+            search = requests.get(url=spotify_url, headers=search_headers)
+            if search.status_code == 400:
+                my_token = get_search_token(table)
+                search_headers = {'Accept': 'application/json', 
+                        'Content-Type': 'application/json', 
+                        'Authorization': f'Bearer {my_token}', 
+                        'User-Agent': UA}
+                search = requests.get(url=spotify_url, headers=search_headers)
+            if search.json() is not None and search.json['id'] == spotify_id:
+                return search.json()
+            else:
+                return {}
+        except requests.ConnectionError as e:
+            raise e
+            return {}
+    else:
+        spotify_url = 'https://api.spotify.com/v1/search'
+        query_string = f'{title} artist:{artist}'
+        search_params = {"q": query_string,
+                        "type": "track",
+                        "market": "US",
+                        "offset": 0,
+                        "limit": 20,
+                        "locale": "en-US,en;q=0.9"
+                        }
+        try:
+            print(f'Searching {title} by {artist}')
             search = requests.get(url=spotify_url, headers=search_headers, params=search_params)
-    except requests.ConnectionError as e:
-        raise e
-        return {}
+            if search.status_code == 400:
+                my_token = get_search_token(table)
+                search_headers = {'Accept': 'application/json', 
+                        'Content-Type': 'application/json', 
+                        'Authorization': f'Bearer {my_token}', 
+                        'User-Agent': UA}
+                search = requests.get(url=spotify_url, headers=search_headers, params=search_params)
+        except requests.ConnectionError as e:
+            raise e
+            return {}
     if search.json()['tracks']['total'] > 0:
         song = None
         tracks = search.json()['tracks']['items']
@@ -322,14 +348,20 @@ def backup_api(station):
     }
     channel = channelMap[station]
     response = requests.get(url=f'https://xmplaylist.com/api/station/{channel}', headers=headers)
-    if response.json() is not None:
-        if response.json().get('results') is not None:
-            song_list = response.json().get('results')
-            backup_song = song_list[len(song_list - 1)].get('track') # get the last song
-            title = backup_song.get('title')
-            artist = backup_song.get('artists')[0]
-            return title, artist
-    return None, None
+    try:
+        json_data = response.json()
+    except ValueError:
+        json_data = None
+
+    if json_data is not None:
+        if json_data.get('results') is not None:
+            song_list = json_data.get('results')
+            backup_song = song_list[len(song_list - 1)] # get the last song
+            title = backup_song.get('track').get('title')
+            artist = backup_song.get('track').get('artists')[0]
+            spotify_id = backup_song.get('spotify').get('id')
+            return title, artist, spotify_id
+    return None, None, None
 
 def handler(event, context):
     if 'queryStringParameters' in event and\
@@ -349,7 +381,7 @@ def handler(event, context):
                         break
                 if title is None:
                     print("Multiple scrape failures, trying xmplaylist.com api.")
-                    title, artist = backup_api(choice)
+                    title, artist, spotify_id = backup_api(choice)
                     if title is None:
                         print("xmplaylist.com api failed, returning 503.")
                         return {
@@ -367,33 +399,40 @@ def handler(event, context):
                     time.sleep(5) # wait 5 seconds before trying again
             song = song_search(title, artist)
             if song == {}:
-                # clear out the last played song title
-                client = boto3.resource('dynamodb')
-                user_api = client.Table('SpotifyState')
-                user_api.update_item(
-                    Key={"apiUser": api_key},
-                    UpdateExpression="set #v1 = :r",
-                    ExpressionAttributeNames={"#v1": "lastPlayed"},
-                    ExpressionAttributeValues={":r": ""}
-                )
-                # return a retry to the client if a song still has not been found after all that
-                print("Song not found at Spotify, returning 503.")
-                return {
-                    'statusCode': 503,
-                    'headers': {"Content-Type": "application/json",
-                                "Retry-After": 10,
-                                "Access-Control-Allow-Origin": "*"},
-                    'body': json.dumps({"status": "Please try again later."})
-                }
-            else:
-                user_token = get_user_token(api_key)
-                song['token'] = user_token
-                return {
-                    'statusCode': 200,
-                    'headers': {"Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"},
-                    'body': json.dumps(song)
-                }
+                if 'spotify_id' in locals():
+                    song = song_search(title=None, artist=None, id=spotify_id)
+                else:
+                    title, artist, spotify_id = backup_api(choice)
+                    if spotify_id is not None:
+                        song = song_search(title=None, artist=None, id=spotify_id)
+                if song != {}:
+                    # reset the last played song title
+                    client = boto3.resource('dynamodb')
+                    user_api = client.Table('SpotifyState')
+                    user_api.update_item(
+                        Key={"apiUser": api_key},
+                        UpdateExpression="set #v1 = :r",
+                        ExpressionAttributeNames={"#v1": "lastPlayed"},
+                        ExpressionAttributeValues={":r": song['name']}
+                    )
+                else:
+                    # return a retry to the client if a song still has not been found after all that
+                    print("Song not found at Spotify, returning 503.")
+                    return {
+                        'statusCode': 503,
+                        'headers': {"Content-Type": "application/json",
+                                    "Retry-After": 10,
+                                    "Access-Control-Allow-Origin": "*"},
+                        'body': json.dumps({"status": "Please try again later."})
+                    }
+            user_token = get_user_token(api_key)
+            song['token'] = user_token
+            return {
+                'statusCode': 200,
+                'headers': {"Content-Type": "application/json",
+                    "Access-Control-Allow-Origin": "*"},
+                'body': json.dumps(song)
+            }
         else:
             return {
             'statusCode': 404,

@@ -12,8 +12,89 @@ import base64
 import json
 import time
 
-BASE_URL = 'https://lookaround-cache-prod.streaming.siriusxm.com/playbackservices/v1/live/lookAround'
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.47'
+
+def get_user_token(api_key):
+    client = boto3.resource('dynamodb')
+    user_api = client.Table('SpotifyState')
+    user_token = user_api.get_item(
+        Key = {'apiUser': api_key}
+    )
+    if user_token['Item']['expiresAt'] < int(time.time()):
+        # refresh the expired token
+        new_token = refresh_user_token(client, api_key, user_token)
+        user_token = new_token['access_token']
+    else:
+        user_token = user_token['Item']['accessToken']
+    return  user_token
+
+def refresh_user_token(client, api_key, user_token):
+    client_id = client.Table('spotifyAPI').get_item(
+        Key={"name": "client_id"})['Item']['value']
+    client_secret = client.Table('spotifyAPI').get_item(
+        Key={"name": "client_secret"})['Item']['value']
+    auth_string = f'{client_id}:{client_secret}'
+    auth_bytes = auth_string.encode('ascii')
+    auth_b64 = base64.b64encode(auth_bytes)
+    auth_string = auth_b64.decode('ascii')
+    headers = {'Content-Type': 'application/x-www-form-urlencoded',
+                'Authorization': f'Basic {auth_string}', 'User-Agent': UA}
+    spotify_url = 'https://accounts.spotify.com/api/token'
+    body = {'grant_type' : 'refresh_token',
+            'refresh_token' : user_token['Item']['refreshToken']
+            }
+    results = requests.post(headers=headers, data=body, url=spotify_url)
+    spotify_token = results.json()
+    if spotify_token['access_token'] is not None:
+        user_api = client.Table('SpotifyState')
+        user_api.update_item(
+            Key={"apiUser": api_key},
+            UpdateExpression="set #v1 = :r, #v2 = :e",
+            ExpressionAttributeNames={"#v1": "accessToken", "#v2": "expiresAt"},
+            ExpressionAttributeValues={":r": spotify_token['access_token'], ":e": int(time.time()) + 3200}
+        )
+        return spotify_token
+    else:
+        print('Failed to renew user token.')
+        return {}
+    
+def get_search_token(table):
+    try:
+        client_id = table.get_item(
+            Key={"name": "client_id"}
+        )['Item']['value']
+        client_secret = table.get_item(
+            Key={"name": "client_secret"}
+        )['Item']['value']
+    except KeyError as e:
+        raise Exception(f"Missing credentials in DynamoDB: {e}")
+    
+    auth_string = f'{client_id}:{client_secret}'
+    auth_bytes = auth_string.encode('ascii')
+    auth_b64 = base64.b64encode(auth_bytes)
+    auth_string = auth_b64.decode('ascii')
+    headers = {'Content-Type': 'application/x-www-form-urlencoded',
+               'Authorization': f'Basic {auth_string}', 'User-Agent': UA
+    }
+    body = 'grant_type=client_credentials&undefined='
+    spotify_url = 'https://accounts.spotify.com/api/token'
+    results = requests.post(headers=headers, data=body, url=spotify_url)
+    if results.json()['access_token'] is not None:
+        new_token = results.json()['access_token']
+    if new_token is not None:
+        table.update_item(
+            Key={"name": "search_token"},
+            UpdateExpression="set #v1 = :r",
+            ExpressionAttributeNames={"#v1": "value"},
+            ExpressionAttributeValues={":r": new_token}
+        )
+        return new_token
+    else:
+        print('Failed to renew search token.')
+
+# region The below code was used for the AWS-only version of this project and is not used in the XAMP version. 
+#        Leaving it here for now but will likely remove it soon
+BASE_URL = 'https://lookaround-cache-prod.streaming.siriusxm.com/playbackservices/v1/live/lookAround'
 ROSETTA = {
 	"holiday-traditions":"33794a0f-2a24-08bb-492e-12e441fab2f0", 
     "holly": "ba107a8d-fb2d-571e-1894-f6ea03ed318a", 
@@ -71,40 +152,6 @@ ROSETTA = {
 	"y2kountry": "d3253c66-e1e1-331b-02e6-71580c33791b", 
     "yacht-rock-311": "9150cc82-af5c-3be3-d170-0e81d87375a8"
 }
-
-def get_search_token(table):
-    try:
-        client_id = table.get_item(
-            Key={"name": "client_id"}
-        )['Item']['value']
-        client_secret = table.get_item(
-            Key={"name": "client_secret"}
-        )['Item']['value']
-    except KeyError as e:
-        raise Exception(f"Missing credentials in DynamoDB: {e}")
-    
-    auth_string = f'{client_id}:{client_secret}'
-    auth_bytes = auth_string.encode('ascii')
-    auth_b64 = base64.b64encode(auth_bytes)
-    auth_string = auth_b64.decode('ascii')
-    headers = {'Content-Type': 'application/x-www-form-urlencoded',
-               'Authorization': f'Basic {auth_string}', 'User-Agent': UA
-    }
-    body = 'grant_type=client_credentials&undefined='
-    spotify_url = 'https://accounts.spotify.com/api/token'
-    results = requests.post(headers=headers, data=body, url=spotify_url)
-    if results.json()['access_token'] is not None:
-        new_token = results.json()['access_token']
-    if new_token is not None:
-        table.update_item(
-            Key={"name": "search_token"},
-            UpdateExpression="set #v1 = :r",
-            ExpressionAttributeNames={"#v1": "value"},
-            ExpressionAttributeValues={":r": new_token}
-        )
-        return new_token
-    else:
-        print('Failed to renew search token.')
 
 def scrape_song(station):
     headers = {"User-Agent": UA, 
@@ -195,49 +242,6 @@ def song_search(title, artist, spotify_id = None):
             return tracks[0]
     else:
         return {}
-
-def get_user_token(api_key):
-    client = boto3.resource('dynamodb')
-    user_api = client.Table('SpotifyState')
-    user_token = user_api.get_item(
-        Key = {'apiUser': api_key}
-    )
-    if user_token['Item']['expiresAt'] < int(time.time()):
-        # refresh the expired token
-        new_token = refresh_user_token(client, api_key, user_token)
-        user_token = new_token['access_token']
-    else:
-        user_token = user_token['Item']['accessToken']
-    return  user_token
-
-def refresh_user_token(client, api_key, user_token):
-    client_id = client.Table('spotifyAPI').get_item(
-        Key={"name": "client_id"})['Item']['value']
-    client_secret = client.Table('spotifyAPI').get_item(
-        Key={"name": "client_secret"})['Item']['value']
-    auth_string = f'{client_id}:{client_secret}'
-    auth_bytes = auth_string.encode('ascii')
-    auth_b64 = base64.b64encode(auth_bytes)
-    auth_string = auth_b64.decode('ascii')
-    headers = {'Content-Type': 'application/x-www-form-urlencoded',
-                'Authorization': f'Basic {auth_string}', 'User-Agent': UA}
-    spotify_url = 'https://accounts.spotify.com/api/token'
-    body = {'grant_type' : 'refresh_token',
-            'refresh_token' : user_token['Item']['refreshToken']
-            }
-    results = requests.post(headers=headers, data=body, url=spotify_url)
-    spotify_token = results.json()
-    if spotify_token['access_token'] is not None:
-        user_api = client.Table('SpotifyState')
-        user_api.update_item(
-            Key={"apiUser": api_key},
-            UpdateExpression="set #v1 = :r, #v2 = :e",
-            ExpressionAttributeNames={"#v1": "accessToken", "#v2": "expiresAt"},
-            ExpressionAttributeValues={":r": spotify_token['access_token'], ":e": int(time.time()) + 3200}
-        )
-        return spotify_token
-    else:
-        print('Failed to renew user token.')
 
 def queue_song(uri, api_key):
     client = boto3.resource('dynamodb')
@@ -362,11 +366,23 @@ def backup_api(station):
             spotify_id = backup_song.get('spotify').get('id')
             return title, artist, spotify_id
     return None, None, None
+# endregion
 
 def handler(event, context):
+    api_key = event['headers']['x-api-key']
+    if event['path'] == '/spotifytoken':
+        user_token = get_user_token(api_key)
+        return {
+            'statusCode': 200,
+            'headers': {"Content-Type": "application/json",
+                        "Access-Control-Allow-Origin": "*"},
+            'body': json.dumps({"spotifyToken": user_token})
+        }
+
+    # region In the XAMP version this block will never be called.
+    # Leaving it here for now but will likely remove it soon
     if 'queryStringParameters' in event and\
       'channel' in event['queryStringParameters']:
-        api_key = event['headers']['x-api-key']
         choice = event['queryStringParameters']['channel']
         if choice in ROSETTA:
             station = ROSETTA[choice]
@@ -439,17 +455,6 @@ def handler(event, context):
             'headers': {"Content-Type": "application/json"},
             'body': json.dumps({"Wrong parameter": "unknown channel"})
         }
-    elif 'queryStringParameters' in event and\
-        'getToken' in event['queryStringParameters'] and\
-            event['queryStringParameters']['getToken'] == 'true':
-        api_key = event['headers']['x-api-key']
-        user_token = get_user_token(api_key)
-        return {
-            'statusCode': 200,
-            'headers': {"Content-Type": "application/json",
-                        "Access-Control-Allow-Origin": "*"},
-            'body': json.dumps({"spotifyToken": user_token})
-        }
     else:
         return {
             'statusCode': 400,
@@ -457,3 +462,4 @@ def handler(event, context):
                         "Access-Control-Allow-Origin": "*"},
             'body': json.dumps({"Missing parameter": "channel"})
         }
+    # endregion

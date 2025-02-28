@@ -1,6 +1,6 @@
-const your_app_id = 'f9f9e208c1bd4e69b53f7a7126f4d655';
-const your_api_url = 'https://22q08igefi.execute-api.us-east-1.amazonaws.com/v1';
-const your_redirect = 'https%3A%2F%2F22q08igefi.execute-api.us-east-1.amazonaws.com%2Fv1%2Fspotifyauth';
+const your_app_id = '';
+const your_api_url = '';
+const your_redirect = '';
 const ROSETTA = {
     "holiday-traditions":"33794a0f-2a24-08bb-492e-12e441fab2f0", 
     "holly": "ba107a8d-fb2d-571e-1894-f6ea03ed318a", 

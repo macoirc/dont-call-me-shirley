@@ -37,7 +37,8 @@ def lambda_handler(event, context):
         spotify_token = results.json()
         user_api.put_item(Item={'apiUser': user, 'expiresAt': int(time.time()) + 3200,
                                         'accessToken': spotify_token['access_token'],
-                                        'refreshToken': spotify_token['refresh_token']
+                                        'refreshToken': spotify_token['refresh_token'],
+                                        'lastPlayed': ''
         })
         return {
             'statusCode': 200,

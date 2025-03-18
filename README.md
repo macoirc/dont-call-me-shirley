@@ -1,7 +1,7 @@
 # Don't Call Me Shirley!
 
 This repository contains an AWS Lambda function, song_scrape, designed to scrape and queue songs from SiriusXM channels to Spotify. 
-There is a second helper function, spotifyauth, to handle authenticating the user with Spotify.
+There is a second helper function, spotifyauth, to handle authenticating the user with Spotify, as well as the xmplaylist function to use as a backup in case something goes wrong with song_scrape.
 Configuring this is not for the faint of heart. I used it as a learning exercise for AWS services, so this documentation will be lacking (significantly).
 Assistance with making the documentation better is welcomed!
 
@@ -17,15 +17,17 @@ Assistance with making the documentation better is welcomed!
 
 ## Introduction
 
-This AWS Lambda function scrapes song data from SiriusXM channels and queues them to a private Spotify queue. It uses the Spotify API to manage the queue and the SiriusXM API to fetch the currently playing songs.
+This AWS Lambda function scrapes song data from SiriusXM channels and plays hem in a browser. It uses the Spotify Web Player SDK to manage the player and the SiriusXM API to fetch the currently playing songs.
 For a small group of users this will all run within the AWS free tier.
 
 ## Features
 
 - Scrapes song data from SiriusXM channels.
-- Queues songs to a Spotify queue.
+- Plays songs in a Spotify web player.
 - Handles token refresh for Spotify API.
 - Uses AWS DynamoDB to store state information.
+- AWS API Gateway makes calling the lambdas easier
+- HTML/JS can be placed anywhere static web sites are supported
 
 ## Setup
 
@@ -46,22 +48,25 @@ For a small group of users this will all run within the AWS free tier.
 
 2. Install dependencies:
     AWS Python Lambdas do not come with the 'requests' package pre-installed. You'll need to upload requests.zip as a layer for your Lambda.
+    Note: urllib.request can be used instead of requests, with minor tweaks to the code
 
-3. Deploy the Lambda function using AWS CLI or AWS Management Console.
+4. Deploy the Lambda function using AWS CLI or AWS Management Console.
 
-4. Configure 2 DynamoDB tables:
+5. Configure 2 DynamoDB tables:
     - spotifyAPI to hold app secrets
     - SpotifyState to hold user secrets/configuration
 
-5. Configure AWS API Gateway to handle requests and trigger the functions.
+6. Configure AWS API Gateway to handle requests and trigger the functions.
     - GET /getsong
     - GET /spotifyauth
+    - GET /spotifytoken
+    - GET /xmplaylist
 
 ## Usage
 
 1. Configure the DynamoDB tables for the necessary variables (see Configuration section).
 2. I strongly recommend setting up an API Gateway configuration to handle requests.
-3. Trigger the Lambda function with an appropriate event to start scraping and queuing songs. You need a client capable of sending a GET request with the API key and channel name, and the ability to handle the response, as well as a looping function to keep pulling new songs. I use an Apple shortcut on my phone and it works great.
+3. Trigger the Lambda function with an appropriate event to start scraping and queuing songs. The /client folder contains a static web app to do just that. 
 
 ## Configuration
 

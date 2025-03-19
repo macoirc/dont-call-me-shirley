@@ -118,7 +118,7 @@ async function togglePlayPause() {
         console.log('Stop button pressed.');
         await player.pause();
         document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
-        document.getElementById('album-image').src = "./Primary_Logo_Green_RGB.svg";
+        document.getElementById('album-image').src = "./logo_300.png";
         document.querySelector('.card-artist').style.display = 'none';
         document.querySelector('.card-title').style.display = 'none';
     } else {

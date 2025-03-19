@@ -17,7 +17,7 @@ Assistance with making the documentation better is welcomed!
 
 ## Introduction
 
-This AWS Lambda function scrapes song data from SiriusXM channels and plays hem in a browser. It uses the Spotify Web Player SDK to manage the player and the SiriusXM API to fetch the currently playing songs.
+This AWS Lambda function scrapes song data from SiriusXM channels and plays them in a browser. It uses the Spotify Web Player SDK to manage the player and the SiriusXM API to fetch the currently playing songs.
 For a small group of users this will all run within the AWS free tier.
 
 ## Features

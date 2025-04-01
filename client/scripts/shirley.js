@@ -39,149 +39,78 @@ var apiKey = checkCookie().then( reply => {
 });
 
 window.onSpotifyWebPlaybackSDKReady = async () => {
-    window.player = new Spotify.Player({
-        name: 'Don\'t Call Me Shirley',
-        getOAuthToken: async cb => { 
-            token = await spotifyToken(apiKey);
-            cb(token); 
-        },
-        volume: 0.5,
-        enableMediaSession: true
-    });
-
-    // Error handling
-    player.addListener('initialization_error', ({ message }) => console.error(message));
-    player.addListener('authentication_error', ({ message }) => console.error(message));
-    player.addListener('account_error', ({ message }) => console.error(message));
-    player.addListener('playback_error', ({ message }) => console.error(message));
-    player.addListener('not_ready', ({ device_id }) => {console.log('Device ID has gone offline', device_id);});
-
-    // Ready
-    player.addListener('ready', ({ device_id }) => {
-        console.log('Ready: ', device_id);
-        player_id = device_id;
-        document.querySelector('.player-body').style.display = 'flex';
-        document.getElementById('channel-selector').addEventListener('change', function() {
-            station = this.value;
-            if (isPlaying) {
-                player.pause();
-                isPlaying = false;
-                togglePlayPause();
-            }
-            console.log('Station changed to: ', station);
-        });
-        document.getElementById('togglePlay').onclick = function() {togglePlayPause();};
-    });
-
-    // End of Song Event
-    player.addListener('player_state_changed', async state => {
-        console.log('Player state changed:');
-        if (state && state.paused && state.position === 0 && isPlaying && needNew) {
-            needNew = false;
-            console.log('End of song reached. Getting new track.');
-            let newTrack = await getTrack('player_state_changed loading new track.');
-            if (newTrack.error) {
-                console.error('Error from getTrack():', newTrack.error);
-                isPlaying = false;
-                alert('An error occurred. Please try again later.');
-                document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
-                return;
-            }
-            try {
-                playResult = await playTrack(newTrack);
-                lastPlayed = newTrack.uri;
-                console.log('Just loaded a new track:', lastPlayed);
-                setNewFlag(); // set flag to get new track after 30 seconds
-            }
-            catch (error) { // check for error playing track
-                document.getElementById('album-image').src = 'https://www.shutterstock.com/shutterstock/videos/26235881/thumb/1.jpg?ip=x480';
-                document.querySelector('.card-artist').innerHTML = 'Error playing track. Please stand by...';
-                document.querySelector('.card-title').innerHTML = '';
-                needNew = true;
-            }
-        } else {
-            console.log('State changed was not an end of song.');
+    document.querySelector('.player-body').style.display = 'flex';
+    document.getElementById('channel-selector').addEventListener('change', async function() {
+        station = this.value;
+        if (isPlaying) {
+            await player.pause();
+            isPlaying = false;
+            needNew = true;
+            document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
+            await togglePlayPause();
         }
+        console.log('Station changed to: ', station);
     });
-
-    player.connect();
-    player.activateElement();
+    document.getElementById('togglePlay').onclick = async function() {await togglePlayPause();};
 }
 
-async function togglePlayPause() {
-    if (!station) {
-        alert('Please select a station first!');
-        return;
+class Track {
+    constructor(song) {
+        this.title = song.name;
+        this.artist = song.artists[0].name;
+        this.images = song.album.images;
+        this.duration = song.duration_ms;
+        this.uri = song.uri;
     }
-    if (isPlaying) {
-        isPlaying = false;
-        console.log('Stop button pressed.');
-        await player.pause();
-        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
-        document.getElementById('album-image').src = "./logo_300.png";
-        document.querySelector('.card-artist').style.display = 'none';
-        document.querySelector('.card-title').style.display = 'none';
-    } else {
-        isPlaying = true;
-        console.log('Play button pressed.');
-        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-stop"></i>';
-        newTrack = await getTrack('togglePlayPause loading new track.');
-        if (newTrack.error) {
-            console.error('Error from getTrack():', newTrack.error);
-            isPlaying = false;
-            alert('An error occurred. Please try again later.');
-            document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
-            return;
+
+    async play() {
+        if (!player_id) {
+            return {'error': 'Player is not initialized.'};
+        }
+        if (!token) {
+            return {'error': 'Token is missing.'};
         }
         try {
-            playResult = await playTrack(newTrack);
-            lastPlayed = newTrack.uri;
-            console.log('Just loaded a new track:', lastPlayed);
-            setNewFlag(); // set flag to get new track after 30 seconds
-        } catch (error) { // check for error playing track
-            document.getElementById('album-image').src = 'https://www.shutterstock.com/shutterstock/videos/26235881/thumb/1.jpg?ip=x480';
-            document.querySelector('.card-artist').innerHTML = 'Please stand by...';
-            document.querySelector('.card-title').innerHTML = '';
+            await player.activateElement();
+            const response = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${player_id}`, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer ' + token
+                },
+                body: JSON.stringify({
+                    "uris": [this.uri],
+                    "position_ms": 0
+                })
+            });
+            if (response.status === 401) {
+                token = await spotifyToken(apiKey);
+                return await this.play();
+            } else if (!response.ok) {
+                return {'error': response.status};
+            } else {
+                needNew = false;
+                console.log(`Now playing: ${this.title} by ${this.artist}`);
+                await updateUI(this);
+                return {'success': 'Track played successfully.'};
+            }
+        } catch (error) {
+            return {'error': error};
         }
     }
 }
 
-function delay(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function playTrack(current_track) {
-    // Play the track
-    result = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${player_id}`, {
-        method: 'PUT',
-        headers: {
-            'Content-Type': 'application/json',
-            'Authorization': 'Bearer ' + token
-        },
-        body: JSON.stringify({
-            "uris": [current_track.uri],
-            "position_ms": 0
-        })
-    });
-    if (result.status === 401) {
-        token = await spotifyToken(apiKey);
-        return await playTrack(current_track);
-    } else if (!result.ok) {
-        console.error('Error playing track:', result.status);
-        return {'error': result.text()};    
-    }
-    await player.resume();
-    needNew = false;
-    let currentTrackName = current_track.name;
-    let artist = current_track.artists[0].name
+async function updateUI(current_track) {
+    let currentTrackName = current_track.title;
+    let artist = current_track.artist
     let myImage = document.getElementById('album-image');
-    current_track.album.images.forEach(image => {
+    current_track.images.forEach(image => {
         if (image.height === 300 && myImage.src != image.url) {
             myImage.src = image.url;
         }
     });
-    var setArtist = document.querySelector('.card-artist');
-    var setTitle = document.querySelector('.card-title');
+    let setArtist = document.querySelector('.card-artist');
+    let setTitle = document.querySelector('.card-title');
     setArtist.innerHTML = artist;
     setTitle.innerHTML = currentTrackName;
     setArtist.style.display = 'flex';
@@ -196,8 +125,75 @@ async function playTrack(current_track) {
     } else {
         setTitle.className = 'card-title';
     }
-    player.activateElement();
-};
+}
+
+async function togglePlayPause() {
+    if (!station) {
+        alert('Please select a station first!');
+        return;
+    }
+    if (isPlaying) {
+        isPlaying = false;
+        await player.pause();
+        await player.disconnect();
+        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
+        document.getElementById('album-image').src = "./logo_300.png";
+        document.querySelector('.card-artist').style.display = 'none';
+        document.querySelector('.card-title').style.display = 'none';
+    } else {
+        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-stop"></i>';
+        await initPlayer();
+        isPlaying = true;
+        let newTrack = await getTrack('togglePlayPause loading new track.');
+        if (newTrack.error) {
+            await handleError(newTrack.error);
+            return;
+        }
+        try {
+            let myTrack = new Track(newTrack);
+            await myTrack.play();
+            lastPlayed = myTrack.title;
+            await setNewFlag(); // set flag to get new track after 30 seconds
+        } catch (error) { // check for error playing track
+            await handleError(error);
+        }
+    }
+}
+
+async function handleError(error) {
+    console.error('Error playing track:', error);
+    document.getElementById('album-image').src = 'https://www.shutterstock.com/shutterstock/videos/26235881/thumb/1.jpg?ip=x480';
+    document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
+    document.querySelector('.card-artist').innerHTML = 'Please try again...';
+    document.querySelector('.card-title').innerHTML = '';
+    needNew = true;
+    await player.disconnect();
+    isPlaying = false;
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function fetchWithRetries(url, options, retries = 3, delayMs = 3000) {
+    for (let attempt = 0; attempt < retries; attempt++) {
+        try {
+            const response = await fetch(url, options);
+            if (response.ok) {
+                return await response.json();
+            } else if (response.status === 401 && options.headers['Authorization']) {
+                console.error('Unauthorized. Retrying with a new token...');
+                // Handle token refresh logic here if needed
+            } else {
+                console.error(`Fetch failed with status ${response.status}. Retrying...`);
+            }
+        } catch (error) {
+            console.error(`Fetch error: ${error}. Retrying...`);
+        }
+        await delay(delayMs);
+    }
+    throw new Error(`Failed to fetch ${url} after ${retries} retries.`);
+}
 
 async function getTrack(message = '', retries = 0) {
     console.log(`getTrack() called: ${message}`);
@@ -228,6 +224,15 @@ async function getTrack(message = '', retries = 0) {
             var title = data.title;
             var artist = data.artist;
         }
+        if (title === lastPlayed) {
+            title = '';
+            artist = '';
+            if (retries < 3) {
+                console.log('Duplicate track found. Getting new track.');
+                await delay(3000);
+                return await getTrack('Duplicate track found...getting new track.', retries + 1);
+            }
+        }
         if (title && artist) {
             var song = await searchSpotify(title, artist, '');
         }
@@ -253,10 +258,6 @@ async function getTrack(message = '', retries = 0) {
         return { 'error': error };
     }
 }
-
-window.onbeforeunload = async function() {
-    await player.disconnect();
-};
 
 function setCookie(cname, cvalue, exdays) {
     const d = new Date();
@@ -378,7 +379,7 @@ async function getBackupTrack() {
             return data;
         }
         let targetNum = data.count - 1;
-        track = data.results[targetNum];
+        let track = data.results[targetNum];
         if (track) {
             backupID = track.spotify.id;
         }
@@ -386,3 +387,57 @@ async function getBackupTrack() {
         return song;
     }
 }
+
+async function initPlayer() {
+    window.player = new Spotify.Player({
+        name: 'Don\'t Call Me Shirley',
+        getOAuthToken: async cb => { 
+            token = await spotifyToken(apiKey);
+            cb(token); 
+        },
+        volume: 0.5,
+        enableMediaSession: true
+    });
+
+    // Error handling
+    await player.addListener('initialization_error', ({ message }) => console.error(message));
+    await player.addListener('authentication_error', ({ message }) => console.error(message));
+    await player.addListener('account_error', ({ message }) => console.error(message));
+    await player.addListener('playback_error', ({ message }) => console.error(message));
+    await player.addListener('not_ready', ({ device_id }) => {console.log('Device ID has gone offline', device_id);});
+
+    // Ready
+    await player.addListener('ready', ({ device_id }) => {
+        console.log('Ready: ', device_id);
+        player_id = device_id;
+    });
+
+    // End of Song Event
+    await player.addListener('player_state_changed', async state => {
+        if (state && state.paused && state.position === 0 && isPlaying && needNew) {
+            needNew = false;
+            console.log('End of song reached. Getting new track.');
+            let newTrack = await getTrack('player_state_changed loading new track.');
+            if (newTrack.error) {
+                handleError(newTrack.error);
+                return;
+            }
+            try {
+                let myTrack = new Track(newTrack);
+                await myTrack.play();
+                lastPlayed = myTrack.title;
+                await setNewFlag(); // set flag to get new track after 30 seconds
+            }
+            catch (error) { // check for error playing track
+                handleError(error);
+            }
+        }
+    });
+
+    await player.connect();
+    await player.activateElement();
+}
+
+window.onbeforeunload = async function() {
+    await player.disconnect();
+};

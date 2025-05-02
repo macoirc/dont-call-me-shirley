@@ -1,6 +1,6 @@
-const your_app_id = '';
-const your_api_url = '';
-const your_redirect = '';
+const your_app_id = 'f9f9e208c1bd4e69b53f7a7126f4d655';
+const your_api_url = 'https://22q08igefi.execute-api.us-east-1.amazonaws.com/v1';
+const your_redirect = 'https%3A%2F%2F22q08igefi.execute-api.us-east-1.amazonaws.com%2Fv1%2Fspotifyauth';
 const ROSETTA = {
     "thehighway": "3b99ed09-32af-9253-5cc7-9ffb81541faa",
     "y2kountry": "d3253c66-e1e1-331b-02e6-71580c33791b",
@@ -23,11 +23,11 @@ const ROSETTA = {
     // To Do: Translate the rest of the channels
 };
 var token = '';
-var station = '';
+var station;
 var isPlaying = false;
 var needNew = true;
 var player_id = '';
-var lastPlayed = '';
+var lastPlayed = 'None';
 var apiKey = checkCookie().then( reply => {
     if (reply) {
         apiKey=reply;
@@ -41,15 +41,15 @@ var apiKey = checkCookie().then( reply => {
 window.onSpotifyWebPlaybackSDKReady = async () => {
     document.querySelector('.player-body').style.display = 'flex';
     document.getElementById('channel-selector').addEventListener('change', async function() {
-        station = this.value;
         if (isPlaying) {
-            await player.pause();
-            isPlaying = false;
+            station.id = this.value;
             needNew = true;
-            document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
             await togglePlayPause();
         }
-        console.log('Station changed to: ', station);
+        else {
+            station = new Station(this.value);
+        }
+        console.log('Station changed to: ', station.id);
     });
     document.getElementById('togglePlay').onclick = async function() {await togglePlayPause();};
 }
@@ -91,7 +91,6 @@ class Track {
             } else {
                 needNew = false;
                 console.log(`Now playing: ${this.title} by ${this.artist}`);
-                await updateUI(this);
                 return {'success': 'Track played successfully.'};
             }
         } catch (error) {
@@ -100,51 +99,144 @@ class Track {
     }
 }
 
-async function updateUI(current_track) {
-    let currentTrackName = current_track.title;
-    let artist = current_track.artist
-    let myImage = document.getElementById('album-image');
-    current_track.images.forEach(image => {
-        if (image.height === 300 && myImage.src != image.url) {
-            myImage.src = image.url;
+class Station{ 
+	constructor(channel) {
+        this.id = channel;
+        this.track = {};
+    }
+
+    async getCurrent(message = '', retries = 0) {
+		console.log(`getCurrent() called: ${message}`);
+        try {
+            let url = `${your_api_url}/getsong?channel=${this.id}`;
+            let options = {
+                method: 'GET',
+                headers: {
+                    'Accept': 'application/json',
+                    'x-api-key': apiKey
+                }
+            };
+            const response = await fetch(url, options);
+
+            if (response.error) {
+                console.error(await response.text());
+                if (retries < 3) {
+                    await updateUI(current_track={}, isRetrying=true);
+                    await delay(3000);
+                    return await this.getCurrent('Did not retrieve XM list...retrying.', retries + 1);
+                } 
+            } else {
+                const data = await response.json();
+                if (data.error) {
+                    console.error(`Error from getCurrent(): ${data.error}`);
+                    return data;
+                }
+                var title = data.title;
+                var artist = data.artist;
+            }
+            if (title.toLowerCase() === lastPlayed) {
+                title = '';
+                artist = '';
+                if (retries < 3) {
+                    console.log('Duplicate track found. Getting new track.');
+                    await delay(3000);
+                    return await this.getCurrent('Duplicate track found...getting new track.', retries + 1);
+                }
+            }
+            if (title && artist) {
+                var song = await searchSpotify(title, artist, '');
+            }
+            if (!song && retries < 3) {
+                console.log('Spotify search unsuccessful. Waiting and then retrying.');
+                await updateUI(current_track={}, isRetrying=true);   
+                await delay(3000);
+                return await this.getCurrent('No song found...retrying.', retries + 1);
+            }
+            if (!song) {
+                // If there's still no song at this point, try the backup.
+                console.log('No song found. Trying backup.');
+                song = await getBackupTrack();
+                if (song.error) {
+                    console.error(`Error from getBackupTrack(): ${song.error}`);
+                    return await this.getCurrent('Error getting backup...Retrying', retries + 1);
+                }
+                if (song) {
+                    title = song.name;
+                    if (title.toLowerCase() === lastPlayed) {
+                        title = '';
+                        artist = '';
+                        if (retries < 3) {
+                            console.log('Duplicate track found in backup. Getting new track.');
+                            await delay(3000);
+                            return await this.getCurrent('Duplicate track found in backup...getting new track.', retries + 1);
+                        }
+                    }
+                }
+            }
+            this.track = song;
+		    return this.track;
+        } catch (error) {
+            console.error('Retrieval error:', error);
+            return { 'error': error };
         }
-    });
-    let setArtist = document.querySelector('.card-artist');
-    let setTitle = document.querySelector('.card-title');
-    setArtist.innerHTML = artist;
-    setTitle.innerHTML = currentTrackName;
-    setArtist.style.display = 'flex';
-    setTitle.style.display = 'flex';
-    if (artist.length > 35) {
+
+	}
+}
+
+async function updateUI(current_track, isRetrying = false) {
+    const setImage = document.getElementById('album-image');
+    const setArtist = document.querySelector('.card-artist');
+    const setTitle = document.querySelector('.card-title');
+    const setButton = document.getElementById('togglePlay');
+    
+    if (Array.isArray(current_track.images) && current_track.images.length > 0) {
+        current_track.images.forEach(image => {
+            if (image.height === 300 && setImage.src != image.url) {
+                setImage.src = image.url;
+            }
+        });
+    } else {
+        setImage.src = './logo_300.png';
+    }
+
+    setArtist.innerHTML = current_track.artist || (isRetrying ? 'Please wait...' : '');
+    setTitle.innerHTML = current_track.title || (isRetrying ? 'Retrying...' : '');
+    //hide artist and title if they are not strings and we are not retrying
+    //setArtist.style.display = typeof current_track.artist === 'string' || isRetrying ? 'flex' : 'none';
+    //setTitle.style.display = typeof current_track.title === 'string' || isRetrying ? 'flex' : 'none';
+
+    if (current_track.artist && current_track.artist.length > 35) {
         setArtist.className = 'card-artist marquee';
     } else {
         setArtist.className = 'card-artist';
     }
-    if (currentTrackName.length > 35) {
+    if (current_track.title && current_track.title.length > 35) {
         setTitle.className = 'card-title marquee';
     } else {
         setTitle.className = 'card-title';
     }
+
+    if(isPlaying) {
+        setButton.innerHTML = '<i class="fa-solid fa-stop"></i>';
+    }
+    else {
+        setButton.innerHTML = '<i class="fa-solid fa-play"></i>';
+    }
 }
 
 async function togglePlayPause() {
-    if (!station) {
+    if (!station.id) {
         alert('Please select a station first!');
         return;
     }
     if (isPlaying) {
         isPlaying = false;
+        await updateUI(current_track = {}, isRetrying = false);
         await player.pause();
         await player.disconnect();
-        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
-        document.getElementById('album-image').src = "./logo_300.png";
-        document.querySelector('.card-artist').style.display = 'none';
-        document.querySelector('.card-title').style.display = 'none';
     } else {
-        document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-stop"></i>';
         await initPlayer();
-        isPlaying = true;
-        let newTrack = await getTrack('togglePlayPause loading new track.');
+        let newTrack = await station.getCurrent('togglePlayPause loading new track.', 3);
         if (newTrack.error) {
             await handleError(newTrack.error);
             return;
@@ -152,7 +244,9 @@ async function togglePlayPause() {
         try {
             let myTrack = new Track(newTrack);
             await myTrack.play();
-            lastPlayed = myTrack.title;
+            isPlaying = true;
+            await updateUI(current_track=myTrack, isRetrying = false);
+            lastPlayed = myTrack.title.toLowerCase();
             await setNewFlag(); // set flag to get new track after 30 seconds
         } catch (error) { // check for error playing track
             await handleError(error);
@@ -161,102 +255,15 @@ async function togglePlayPause() {
 }
 
 async function handleError(error) {
+    isPlaying = false;
     console.error('Error playing track:', error);
-    document.getElementById('album-image').src = 'https://www.shutterstock.com/shutterstock/videos/26235881/thumb/1.jpg?ip=x480';
-    document.getElementById('togglePlay').innerHTML = '<i class="fa-solid fa-play"></i>';
-    document.querySelector('.card-artist').innerHTML = 'Please try again...';
-    document.querySelector('.card-title').innerHTML = '';
+    await updateUI(current_track = {}, isRetrying = false);
     needNew = true;
     await player.disconnect();
-    isPlaying = false;
 }
 
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
-}
-
-async function fetchWithRetries(url, options, retries = 3, delayMs = 3000) {
-    for (let attempt = 0; attempt < retries; attempt++) {
-        try {
-            const response = await fetch(url, options);
-            if (response.ok) {
-                return await response.json();
-            } else if (response.status === 401 && options.headers['Authorization']) {
-                console.error('Unauthorized. Retrying with a new token...');
-                // Handle token refresh logic here if needed
-            } else {
-                console.error(`Fetch failed with status ${response.status}. Retrying...`);
-            }
-        } catch (error) {
-            console.error(`Fetch error: ${error}. Retrying...`);
-        }
-        await delay(delayMs);
-    }
-    throw new Error(`Failed to fetch ${url} after ${retries} retries.`);
-}
-
-async function getTrack(message = '', retries = 0) {
-    console.log(`getTrack() called: ${message}`);
-    try {
-        const response = await fetch(`${your_api_url}/getsong?channel=${station}`, {
-            method: 'GET',
-            headers: {
-                'Accept': 'application/json',
-                'x-api-key': apiKey
-            }
-        });
-
-        if (response.error) {
-            console.error(await response.text());
-            if (retries < 3) {
-                document.getElementById('album-image').src = 'https://www.shutterstock.com/shutterstock/videos/26235881/thumb/1.jpg?ip=x480';
-                document.querySelector('.card-artist').innerHTML = 'Please stand by...';
-                document.querySelector('.card-title').innerHTML = 'Retrying...';
-                await delay(3000);
-                return await getTrack('Did not retrieve XM list...retrying.', retries + 1);
-            } 
-        } else {
-            const data = await response.json();
-            if (data.error) {
-                console.error(`Error from getTrack(): ${data.error}`);
-                return data;
-            }
-            var title = data.title;
-            var artist = data.artist;
-        }
-        if (title === lastPlayed) {
-            title = '';
-            artist = '';
-            if (retries < 3) {
-                console.log('Duplicate track found. Getting new track.');
-                await delay(3000);
-                return await getTrack('Duplicate track found...getting new track.', retries + 1);
-            }
-        }
-        if (title && artist) {
-            var song = await searchSpotify(title, artist, '');
-        }
-        if (!song && retries < 3) {
-            console.log('Spotify search unsuccessful. Waiting and then retrying.');
-            document.getElementById('album-image').src = 'https://www.shutterstock.com/shutterstock/videos/26235881/thumb/1.jpg?ip=x480';
-            document.querySelector('.card-artist').innerHTML = 'Please stand by...';
-            document.querySelector('.card-title').innerHTML = 'Retrying...';    
-            await delay(3000);
-            return await getTrack('No song found...retrying.', retries + 1);
-        }
-        if (!song) {
-            // If there's still no song at this point, try the backup.
-            console.log('No song found. Trying backup.');
-            song = await getBackupTrack();
-            if (song.error) {
-                console.error(`Error from getBackupTrack(): ${song.error}`);
-            }
-        }
-        return song;
-    } catch (error) {
-        console.error('Retrieval error:', error);
-        return { 'error': error };
-    }
 }
 
 function setCookie(cname, cvalue, exdays) {
@@ -365,7 +372,7 @@ async function setNewFlag() {
 }
 
 async function getBackupTrack() {
-    let bkpResponse = await fetch(`${your_api_url}/xmplaylist?channel=${station}`, {
+    let bkpResponse = await fetch(`${your_api_url}/xmplaylist?channel=${station.id}`, {
         method: 'GET',
         headers: {
             'Accept': 'application/json',
@@ -417,7 +424,7 @@ async function initPlayer() {
         if (state && state.paused && state.position === 0 && isPlaying && needNew) {
             needNew = false;
             console.log('End of song reached. Getting new track.');
-            let newTrack = await getTrack('player_state_changed loading new track.');
+            let newTrack = await station.getCurrent('player_state_changed loading new track.');
             if (newTrack.error) {
                 handleError(newTrack.error);
                 return;
@@ -425,7 +432,9 @@ async function initPlayer() {
             try {
                 let myTrack = new Track(newTrack);
                 await myTrack.play();
-                lastPlayed = myTrack.title;
+                isPlaying = true;
+                await updateUI(current_track = myTrack, isRetrying = false);
+                lastPlayed = myTrack.title.toLowerCase();
                 await setNewFlag(); // set flag to get new track after 30 seconds
             }
             catch (error) { // check for error playing track

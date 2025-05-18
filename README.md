@@ -35,7 +35,7 @@ For a small group of users this will all run within the AWS free tier.
 
 - AWS account with Lambda, API and DynamoDB access. Free tier is fine.
 - Spotify Developer account with a configured app.
-  - Scopes: user-read-playback-state, user-modify-playback-state, user-read-currently-playing.
+  - Scopes: streaming, user-read-private, user-read-playback-state, user-modify-playback-state, user-read-currently-playing, user-read-email.
 - SiriusXM premium account.
 
 ### Installation

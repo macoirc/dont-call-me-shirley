@@ -1,16 +1,12 @@
-import os
 from datetime import datetime
 from urllib.request import Request, urlopen
-import json
 
 SITE = 'https://xmplaylist.com/api/station'  # URL of the site to check
 EXPECTED = 'spotify'  # String expected to be on the page
 
-
 def validate(res):
     #Return False if string is missing
     return EXPECTED in res
-
 
 def lambda_handler(event, context):
     try:

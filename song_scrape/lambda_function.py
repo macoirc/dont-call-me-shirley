@@ -7,10 +7,12 @@ Returns:
 - dict: The response containing the status code, headers, and body.
 """
 import boto3
-import requests
 import base64
 import json
 import time
+import urllib.request
+import urllib.parse
+import urllib.error
 
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edg/117.0.2045.47'
 SXM_URL = 'https://lookaround-cache-prod.streaming.siriusxm.com/playbackservices/v1/live/lookAround'
@@ -106,9 +108,15 @@ def refresh_user_token(client, api_key, user_token):
     body = {'grant_type' : 'refresh_token',
             'refresh_token' : user_token['Item']['refreshToken']
             }
-    results = requests.post(headers=headers, data=body, url=spotify_url)
-    spotify_token = results.json()
-    if spotify_token['access_token'] is not None:
+    data = urllib.parse.urlencode(body).encode('ascii')
+    req = urllib.request.Request(spotify_url, data=data, headers=headers)
+    try:
+        with urllib.request.urlopen(req) as response:
+            spotify_token = json.load(response)
+    except urllib.error.URLError as e:
+        print(f'Failed to renew user token: {e}')
+        return {}
+    if 'access_token' in spotify_token and spotify_token['access_token']:
         user_api = client.Table('SpotifyState')
         user_api.update_item(
             Key={"apiUser": api_key},
@@ -126,10 +134,11 @@ def refresh_user_token(client, api_key, user_token):
 def scrape_song(station):
     headers = {"User-Agent": UA, 
                'Cache-Control': 'max-age=60'}
-    response = requests.get(url=SXM_URL, headers=headers)
+    req = urllib.request.Request(url=SXM_URL, headers=headers)
     try:
-        json_data = response.json()
-    except ValueError:
+        with urllib.request.urlopen(req) as response:
+            json_data = json.load(response)
+    except (urllib.error.URLError, json.JSONDecodeError):
         json_data = None
 
     if json_data is not None:

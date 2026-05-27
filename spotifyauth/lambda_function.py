@@ -1,8 +1,9 @@
 import boto3
-import requests
 import base64
 import json
 import time
+import urllib.request
+import urllib.parse
 
 UA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/117.0.0.0 Safari/537.36 Edge/117.0.2045.47'
 BASE_URI = 'YOUR AWS spotifyauth URI HERE'
@@ -33,8 +34,14 @@ def lambda_handler(event, context):
                 'code' : auth_code,
                 'redirect_uri' : BASE_URI
                 }
-        results = requests.post(headers=headers, data=body, url=spotify_url)
-        spotify_token = results.json()
+        data = urllib.parse.urlencode(body).encode('ascii')
+        req = urllib.request.Request(spotify_url, data=data, headers=headers)
+        try:
+            with urllib.request.urlopen(req) as response:
+                spotify_token = json.load(response)
+        except Exception as e:
+            print(f"Error during Spotify token exchange: {e}")
+            return {'statusCode': 500, 'headers': {"Content-Type": "application/json"}, 'body': json.dumps({"Error": "Failed to get token from Spotify."})}
         user_api.put_item(Item={'apiUser': user, 'expiresAt': int(time.time()) + 3200,
                                         'accessToken': spotify_token['access_token'],
                                         'refreshToken': spotify_token['refresh_token'],

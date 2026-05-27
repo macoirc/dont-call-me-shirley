@@ -46,17 +46,13 @@ For a small group of users this will all run within the AWS free tier.
     cd dont-call-me-shirley
     ```
 
-2. Install dependencies:
-    AWS Python Lambdas do not come with the 'requests' package pre-installed. You'll need to upload requests.zip as a layer for your Lambda.
-    Note: urllib.request can be used instead of requests, with minor tweaks to the code
+2. Deploy the Lambda function using AWS CLI or AWS Management Console.
 
-4. Deploy the Lambda function using AWS CLI or AWS Management Console.
-
-5. Configure 2 DynamoDB tables:
+3. Configure 2 DynamoDB tables:
     - spotifyAPI to hold app secrets
     - SpotifyState to hold user secrets/configuration
 
-6. Configure AWS API Gateway to handle requests and trigger the functions.
+4. Configure AWS API Gateway to handle requests and trigger the functions.
     - GET /getsong
     - GET /spotifyauth
     - GET /spotifytoken

@@ -3,6 +3,11 @@
  * Refactored using the State Design Pattern for robust playback lifecycle management.
  */
 
+/**
+ * Don't Call Me Shirley - Spotify/SiriusXM Player
+ * Refactored using the State Design Pattern for robust playback lifecycle management.
+ */
+
 const your_app_id = '';
 const your_api_url = '';
 const your_redirect = '';
@@ -370,6 +375,7 @@ async function updateUI(current_track = {}, isRetrying = false, isPlaying = fals
     const setTitle = document.querySelector('.card-title');
     const setButton = document.getElementById('togglePlay');
     
+    if (current_track && Array.isArray(current_track.images) && current_track.images.length > 0) {
     if (current_track && Array.isArray(current_track.images) && current_track.images.length > 0) {
         current_track.images.forEach(image => {
             if (image.height === 300 && setImage.src != image.url) {
